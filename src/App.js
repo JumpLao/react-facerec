@@ -1,78 +1,96 @@
-import React from 'react';
-import {
-  Form,
-  Select,
-  InputNumber,
-  DatePicker,
-  Switch,
-  Slider,
-  Button,
-  Rate,
-  Typography,
-  Space,
-  Divider,
-} from 'antd';
-import './App.less';
+import React, { useEffect, useRef, useState } from 'react';
+import * as faceapi from 'face-api.js'
+import { useAsync, useInterval } from 'react-use';
+import { Button, Col, Row, Skeleton } from 'antd';
 
-const { Option } = Select;
-const { Title } = Typography;
+const MODEL_URL = '/models'
 
-const App = () => (
-  <>
-    <section style={{ textAlign: 'center', marginTop: 48, marginBottom: 40 }}>
-      <Space align="start">
-        <img
-          style={{width: 40, height: 40 }}
-          src="https://gw.alipayobjects.com/zos/rmsportal/KDpgvguMpGfqaHPjicRK.svg"
-          alt="Ant Design"
-        />
-        <Title level={2} style={{ marginBottom: 0 }}>
-          Ant Design
-        </Title>
-      </Space>
-    </section>
-    <Divider style={{ marginBottom: 60 }}>Form</Divider>
-    <Form labelCol={{ span: 8 }} wrapperCol={{ span: 8 }}>
-      <Form.Item label="数字输入框">
-        <InputNumber min={1} max={10} defaultValue={3} />
-        <span className="ant-form-text"> 台机器</span>
-        <a href="https://ant.design">链接文字</a>
-      </Form.Item>
-      <Form.Item label="开关">
-        <Switch defaultChecked />
-      </Form.Item>
-      <Form.Item label="滑动输入条">
-        <Slider defaultValue={70} />
-      </Form.Item>
-      <Form.Item label="选择器">
-        <Select defaultValue="lucy" style={{ width: 192 }}>
-          <Option value="jack">jack</Option>
-          <Option value="lucy">lucy</Option>
-          <Option value="disabled" disabled>disabled</Option>
-          <Option value="yiminghe">yiminghe</Option>
-        </Select>
-      </Form.Item>
-      <Form.Item label="日期选择框">
-        <DatePicker />
-      </Form.Item>
-      <Form.Item label="日期范围选择框">
-        <DatePicker.RangePicker />
-      </Form.Item>
-      <Form.Item label="评分">
-        <Rate defaultValue={5} />
-      </Form.Item>
-      <Form.Item wrapperCol={{ span: 8, offset: 8 }}>
-        <Space>
-          <Button type="primary" htmlType="submit">
-            Submit
+const App = () => {
+  const [checkinterval, setcheckinterval] = useState(200)
+  const [detectinterval, setdetectinterval] = useState(null)
+  const [modelLoaded, setmodelLoaded] = useState(false)
+  const videoref = useRef(null)
+  const overlaycanvasref = useRef(null)
+  useAsync(async () => {
+    await faceapi.loadSsdMobilenetv1Model(MODEL_URL)
+    await faceapi.loadFaceLandmarkModel(MODEL_URL)
+    await faceapi.loadFaceRecognitionModel(MODEL_URL)
+    return Promise.resolve()
+  })
+  useAsync(async () => {
+    console.log('getting user media', videoref)
+    if (!videoref.current) {
+      return Promise.resolve()
+    }
+    console.log('get user media')
+    const stream = await navigator.mediaDevices.getUserMedia({ video: {} })
+    videoref.current.srcObject = stream
+    // const videoEl = $('#inputVideo').get(0)
+    // videoEl.srcObject = stream
+    return Promise.resolve()
+  }, [videoref.current])
+  useInterval(() => {
+    console.log('check model loaded')
+    if (!!faceapi.nets.ssdMobilenetv1.params && 
+        !!faceapi.nets.faceLandmark68Net.params &&
+        !!faceapi.nets.faceRecognitionNet.params
+        ) {
+      console.log('model loaded')
+      setcheckinterval(null)
+      setmodelLoaded(true)
+    }
+  }, checkinterval)
+  useInterval(async () => {
+    // face detect
+    const videoEl = videoref.current
+    const canvas = overlaycanvasref.current
+    const result = await faceapi.detectSingleFace(videoEl)
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    if (result) {
+      // const {
+      //   descriptor
+      // } = result
+      console.log('face detected')
+      // setDescriptor(descriptor)
+      // if (!currentDescriptor) {
+      //   setcurrentDescriptor(descriptor)
+      // }
+      const dims = faceapi.matchDimensions(canvas, videoEl, true)
+      faceapi.draw.drawDetections(canvas, faceapi.resizeResults(result, dims))
+    }
+  }, detectinterval)
+  const handleOnPlay = () => {
+    setdetectinterval(30)
+  }
+  const startDetect = () => {
+    setdetectinterval(30)
+  }
+  const stopDetect = () => {
+    setdetectinterval(null)
+  }
+  if (!modelLoaded) {
+    return <Skeleton />
+  }
+  return (
+    <React.Fragment>
+      <div onLoad={handleOnPlay} style={{position: 'relative'}}>
+        <video ref={videoref} autoPlay muted playsInline></video>
+        <canvas style={{position: 'absolute', top:0, left:0}} ref={overlaycanvasref} />
+      </div>
+      <Row>
+        <Col>
+          <Button onClick={() => startDetect()}>
+            Start Face Detect
           </Button>
-          <Button>
-            Cancel
+        </Col>
+        <Col>
+        <Button onClick={() => stopDetect()}>
+            Stop Face Detect
           </Button>
-        </Space>
-      </Form.Item>
-    </Form>
-  </>
-);
+        </Col>
+      </Row>
+    </React.Fragment>
+  )
+}
 
 export default App;
