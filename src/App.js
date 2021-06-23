@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import * as faceapi from 'face-api.js'
 import { useAsync, useInterval } from 'react-use';
 import { Button, Col, Row, Skeleton } from 'antd';
